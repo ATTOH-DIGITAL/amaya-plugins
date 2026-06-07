@@ -1,0 +1,19 @@
+{
+  "name": "amaya",
+  "owner": {
+    "name": "AMAYA Holdings",
+    "url": "https://amayaholdings.co.uk"
+  },
+  "metadata": {
+    "description": "Practical UK business-formation and SME-operations plugins from AMAYA Holdings."
+  },
+  "plugins": [
+    {
+      "name": "amaya",
+      "source": "./plugins/amaya",
+      "description": "UK company formation guidance for founders and builders — choose the right structure, incorporate correctly, and stay compliant after day one.",
+      "version": "0.1.0",
+      "author": { "name": "AMAYA Holdings", "url": "https://amayaholdings.co.uk" }
+    }
+  ]
+}
