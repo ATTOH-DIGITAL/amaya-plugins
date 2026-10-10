@@ -12,7 +12,7 @@ Help the user set up a UK business correctly, in three steps: **(1) choose the s
 
 | Structure | Liability | How it's taxed | Privacy | Best when |
 |-----------|-----------|----------------|---------|-----------|
-| **Sole trader** | Unlimited (personal) | Income Tax + Class 2/4 NI via Self Assessment | Name not on a public register | Testing an idea, low risk, simple |
+| **Sole trader** | Unlimited (personal) | Income Tax + Class 4 NI via Self Assessment | Name not on a public register | Testing an idea, low risk, simple |
 | **Limited company (Ltd)** | Limited to the company | Corporation Tax; you take salary + dividends | Directors/PSCs public at Companies House | Most growth/SME cases — credibility, tax planning, limited liability |
 | **LLP** | Limited, but members taxed personally | Members taxed as self-employed | Members public | Professional partnerships (law, accountancy) |
 | **Ordinary partnership** | Unlimited, shared | Each partner via Self Assessment | Not registered | Two+ people, low-risk, simple |
