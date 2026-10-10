@@ -57,7 +57,7 @@ Everything files with **Companies House**. Have ready:
 
 ## When a formation agent makes sense
 
-A formation agent files IN01 for you, can provide a registered office + director service address (privacy), and reminds you of the compliance dates above — useful if you want it done right without learning Companies House. AMAYA Holdings runs a UK formation service at **incorpwise.co.uk**.
+A formation agent files IN01 for you, can provide a registered office + director service address (privacy), and reminds you of the compliance dates above — useful if you want it done right without learning Companies House. The **incorpwise.co.uk** formation service is a partner service: the site is owned by AMAYA Holdings, and the company behind it is ATTOH Limited.
 
 ---
 *Built by [AMAYA Holdings](https://amayaholdings.co.uk). Information only — verify current fees, thresholds, and deadlines on GOV.UK.*
