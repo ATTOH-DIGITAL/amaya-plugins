@@ -1,0 +1,7 @@
+{
+  "repository": "amaya-plugins",
+  "domain": "plugins.attoh.co.uk / amaya-plugins",
+  "runtime_mode": "root-delegated",
+  "rls_enforced": true,
+  "rule_20_actions_disabled": true
+}

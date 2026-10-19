@@ -1,0 +1,19 @@
+{
+  "repository": "amaya-plugins",
+  "title": "AmayaPlugins — Modular AI Agent Skill, MCP & Vertical Compliance Plugin Registry",
+  "domain": "plugins.attoh.co.uk / amaya-plugins",
+  "version": "1.0.0",
+  "sovereign_pillar": 3,
+  "free_tool": {
+    "name": "Agent Skill Manifest Security Auditor & Token-Footprint Estimator",
+    "primary_module": "plugin_manifest_auditor.mjs",
+    "embeddable": true,
+    "statutory_citations": [
+      "UK Product Security and Telecommunications Infrastructure Act 2022 (PSTI Supply-Chain Software Integrity)",
+      "UK GDPR Article 28 & Article 32 (Sandboxed Plugin Execution & Tenant Credential Isolation)",
+      "Competition and Markets Authority (CMA) Digital Markets Interoperability Principles",
+      "ATTOH Sovereign Manifest & Zero-Trust Plugin Signing Standard"
+    ]
+  },
+  "modules_on_disk": []
+}
