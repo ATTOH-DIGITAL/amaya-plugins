@@ -117,6 +117,22 @@ if (existsSync(runtimeVerify)) {
   check('Runtime verify suite (runtime/scripts/verify.mjs)', res.status === 0, `exit code ${res.status}`);
 }
 
+// Run n8n table-ref and schema-coverage suites if present
+for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-coverage.mjs']) {
+  const sp = join(ROOT, s);
+  if (existsSync(sp)) {
+    const res = spawnSync(process.execPath, [sp], { cwd: ROOT, stdio: 'inherit' });
+    check(`${s} exits 0`, res.status === 0);
+  }
+}
+
+// Run root test-runner if present
+const tr = join(ROOT, 'scripts', 'test-runner.mjs');
+if (existsSync(tr)) {
+  const res = spawnSync(process.execPath, [tr], { cwd: ROOT, stdio: 'inherit' });
+  check('scripts/test-runner.mjs exits 0', res.status === 0);
+}
+
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
 if (failed > 0) {
   process.exit(1);
