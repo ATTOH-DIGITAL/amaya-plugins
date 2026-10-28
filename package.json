@@ -1,0 +1,9 @@
+{
+  "name": "amaya-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Smoke-test entry for the five-pillar layout; no runtime dependencies.",
+  "scripts": {
+    "test": "node scripts/test-runner.mjs"
+  }
+}
