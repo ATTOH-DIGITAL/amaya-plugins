@@ -3,7 +3,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -27,20 +26,9 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, file), 'utf8'));
 }
 
-// node --check on a copy so .js files parse as ESM or CommonJS, whichever they are.
+// node --check on the real file, so .js is judged in its actual module context.
 function syntaxOk(file) {
-  const src = fs.readFileSync(file, 'utf8');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chk-'));
-  try {
-    for (const ext of ['.mjs', '.cjs']) {
-      const tmp = path.join(dir, 'f' + ext);
-      fs.writeFileSync(tmp, src);
-      if (spawnSync(process.execPath, ['--check', tmp]).status === 0) return true;
-    }
-    return false;
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  return spawnSync(process.execPath, ['--check', file]).status === 0;
 }
 
 const manifest = fs.existsSync(path.join(ROOT, 'snap_modules/manifest.json'))

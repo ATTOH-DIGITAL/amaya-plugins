@@ -37,7 +37,7 @@ Maintained by [AMAYA Holdings](https://amayaholdings.co.uk).
 
 ## Office agents
 
-<!-- office-agents-section: generated 2026-10-28 from the live register (builder_blocks, product_parts) and this repo's git tree; ledger task d5583ba1-530c-4a55-b38f-fd19563cb83a -->
+<!-- office-agents-section: generated 2026-10-28 from register reads (builder_blocks, product_parts) where a row exists, and this repo's git tree; ledger task d5583ba1-530c-4a55-b38f-fd19563cb83a -->
 
 **Owner agent:** UNASSIGNED (no register row, checked 2026-10-28)
 
