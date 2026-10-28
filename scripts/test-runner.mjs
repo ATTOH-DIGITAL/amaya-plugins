@@ -46,7 +46,7 @@ test('pillar 3: modules listed as on disk exist', (t) => {
   for (const m of listed) {
     const name = typeof m === 'string' ? m : m.file || m.path || m.name || m.id;
     if (!name) continue;
-    const hit = FILES.some((f) => rel(f) === name || rel(f).endsWith('/' + name) || path.basename(f) === name);
+    const hit = FILES.some((f) => [name, 'snap_modules/' + name, 'runtime/' + name].includes(rel(f)));
     assert.ok(hit, `manifest lists ${name} but no such file is in the repo`);
   }
 });
