@@ -14,9 +14,9 @@
  *   8. Runtime Verification Suite: executes runtime/scripts/verify.mjs if present
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +25,13 @@ const ROOT = resolve(__dirname, '..');
 let passed = 0;
 let failed = 0;
 
+// The date is fixed on purpose (PILLARS-STANDARD.md): every repo flips from WARN to FAIL on the same day, so there is no per-environment override.
+const WARN_UNTIL = '2026-11-04';
+const enforcing = new Date().toISOString().slice(0, 10) >= WARN_UNTIL;
+function warn(label, detail = '') {
+  if (enforcing) { failed += 1; console.error(`  [FAIL] ${label} — ${detail}`); }
+  else console.log(`  [WARN] ${label} — ${detail} (becomes a hard fail on ${WARN_UNTIL})`);
+}
 function check(label, condition, detail = '') {
   if (condition) {
     passed += 1;
@@ -113,6 +120,7 @@ if (existsSync(runtimeVerify)) {
   const res = spawnSync(process.execPath, [runtimeVerify], {
     cwd: join(ROOT, 'runtime'),
     stdio: 'inherit',
+    timeout: 120000,
   });
   check('Runtime verify suite (runtime/scripts/verify.mjs)', res.status === 0, `exit code ${res.status}`);
 }
@@ -121,16 +129,60 @@ if (existsSync(runtimeVerify)) {
 for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-coverage.mjs']) {
   const sp = join(ROOT, s);
   if (existsSync(sp)) {
-    const res = spawnSync(process.execPath, [sp], { cwd: ROOT, stdio: 'inherit' });
+    const res = spawnSync(process.execPath, [sp], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
     check(`${s} exits 0`, res.status === 0);
   }
 }
 
-// Run root test-runner if present
-const tr = join(ROOT, 'scripts', 'test-runner.mjs');
-if (existsSync(tr)) {
-  const res = spawnSync(process.execPath, [tr], { cwd: ROOT, stdio: 'inherit' });
-  check('scripts/test-runner.mjs exits 0', res.status === 0);
+// scripts/test-runner.mjs is run once, by P6 below (WARN until WARN_UNTIL, then hard fail).
+
+// P6-P10 (PILLARS-STANDARD.md): WARN until WARN_UNTIL, then hard fail. Offline file checks only; the P9 probe and P10 register need scripts/pillar_scan.mjs.
+{
+  const readme = existsSync(join(ROOT, 'README.md')) ? readFileSync(join(ROOT, 'README.md'), 'utf8') : '';
+  let rt = {};
+  try { rt = JSON.parse(readFileSync(join(ROOT, 'runtime', 'manifest.json'), 'utf8')); } catch { /* absent or invalid */ }
+  if (!rt || typeof rt !== 'object' || Array.isArray(rt)) rt = {};
+  const CODE_RE = /\.(mjs|cjs|js|jsx|ts|tsx|py|sh|go|rs|rb|php|java)$/i;
+  const hasCode = (d, depth = 0) => { if (depth > 8) return false; try { return readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name), depth + 1) : CODE_RE.test(e.name))); } catch { return false; } };
+  const runner = join(ROOT, 'scripts', 'test-runner.mjs');
+  if (!existsSync(runner)) warn('P6 scripts/test-runner.mjs missing', 'add a runner that exits 0');
+  else {
+    const tr = spawnSync(process.execPath, [runner], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
+    if (tr.status === 0) check('P6 scripts/test-runner.mjs exits 0', true);
+    else check('P6 scripts/test-runner.mjs exits 0', false, `exit ${tr.status ?? 'timeout'}`);
+  }
+  const sec = readme.match(/^#{1,6}[ \t]*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,6}[ \t]|$(?![\s\S]))/im);
+  if (!sec) warn('P7 README office-agent section missing', 'add an "Office agent" section with "Owner agent:" and "Entry:" lines');
+  else {
+    // Deterministic contract: two labelled lines, outside code fences. "Owner agent: <name>" (UNASSIGNED allowed) and "Entry: <path>" naming an existing in-repo file.
+    const body = sec[1].replace(/```[\s\S]*?```/g, '');
+    const ownerM = body.match(/^[ \t]*(?:[-*][ \t]+)?\**Owner agent:\**[ \t]*([^\n]*)$/im);
+    const owner = !!ownerM && /[A-Za-z0-9]/.test(ownerM[1]);
+    const entryM = body.match(/^[ \t]*(?:[-*][ \t]+)?\**Entry(?: ?(?:point|file))?:\**[ \t]*`?([\w./-]+)`?[ \t]*$/im);
+    let entry = false;
+    if (entryM) { try { const p = realpathSync(resolve(ROOT, entryM[1])); entry = p.startsWith(realpathSync(ROOT) + sep) && statSync(p).isFile(); } catch { entry = false; } }
+    if (owner && entry) check('P7 README office-agent section has an Owner agent line and an existing Entry file', true);
+    else warn('P7 office-agent section needs an "Owner agent: <name>" line (UNASSIGNED is allowed) and an "Entry: <path>" line naming an existing file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
+  }
+  const cp = typeof rt.code_path === 'string' ? rt.code_path.trim() : '';
+  const PLACEHOLDER = /^(?:tbd|todo|none|null|n\/a|na|x+|\.+|-+|changeme|example|placeholder)$/i;
+  const rk = typeof rt.register_key === 'string' && !PLACEHOLDER.test(rt.register_key.trim()) ? rt.register_key.trim() : '';
+  if (!cp) warn('P8 runtime/manifest.json has no code_path', 'point it at code that exists');
+  else if (/^[\w.-]+\/[\w.-]+:/.test(cp)) warn('P8 code_path points at another repo', 'not verified offline');
+  else {
+    let abs = resolve(ROOT, cp);
+    try { abs = realpathSync(abs); } catch { /* absent: existsSync below fails */ }
+    const rootReal = realpathSync(ROOT);
+    const inside = abs === rootReal || abs.startsWith(rootReal + sep);
+    let ok = false;
+    try { ok = inside && abs !== rootReal && (statSync(abs).isDirectory() ? hasCode(abs) : CODE_RE.test(abs)); } catch { ok = false; }
+    if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
+    else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
+  }
+  if (!(() => { try { const u = new URL(typeof rt.health_url === 'string' ? rt.health_url.trim() : ''); return /^https?:$/.test(u.protocol) && u.hostname.includes('.') && !/(^|\.)example\.(com|org|net)$/i.test(u.hostname); } catch { return false; } })()) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
+  else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
+  if (!rk) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
+  else console.log(`  [INFO] P10 register_key ${rk} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
 }
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
