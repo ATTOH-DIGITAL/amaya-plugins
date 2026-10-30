@@ -14,9 +14,9 @@
  *   8. Runtime Verification Suite: executes runtime/scripts/verify.mjs if present
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +25,13 @@ const ROOT = resolve(__dirname, '..');
 let passed = 0;
 let failed = 0;
 
+// The date is fixed on purpose (PILLARS-STANDARD.md): every repo flips from WARN to FAIL on the same day, so there is no per-environment override.
+const WARN_UNTIL = '2026-11-04';
+const enforcing = new Date().toISOString().slice(0, 10) >= WARN_UNTIL;
+function warn(label, detail = '') {
+  if (enforcing) { failed += 1; console.error(`  [FAIL] ${label} — ${detail}`); }
+  else console.log(`  [WARN] ${label} — ${detail} (becomes a hard fail on ${WARN_UNTIL})`);
+}
 function check(label, condition, detail = '') {
   if (condition) {
     passed += 1;
@@ -131,6 +138,48 @@ const tr = join(ROOT, 'scripts', 'test-runner.mjs');
 if (existsSync(tr)) {
   const res = spawnSync(process.execPath, [tr], { cwd: ROOT, stdio: 'inherit' });
   check('scripts/test-runner.mjs exits 0', res.status === 0);
+}
+
+// P6-P10 (PILLARS-STANDARD.md): WARN until WARN_UNTIL, then hard fail. Offline file checks only; the P9 probe and P10 register need scripts/pillar_scan.mjs.
+{
+  const readme = existsSync(join(ROOT, 'README.md')) ? readFileSync(join(ROOT, 'README.md'), 'utf8') : '';
+  let rt = {};
+  try { rt = JSON.parse(readFileSync(join(ROOT, 'runtime', 'manifest.json'), 'utf8')); } catch { /* absent or invalid */ }
+  const CODE_RE = /\.(mjs|cjs|js|jsx|ts|tsx|py|sh|go|rs|rb|php|java)$/i;
+  const hasCode = (d) => readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name)) : CODE_RE.test(e.name)));
+  const runner = join(ROOT, 'scripts', 'test-runner.mjs');
+  if (!existsSync(runner)) warn('P6 scripts/test-runner.mjs missing', 'add a runner that exits 0');
+  else {
+    const tr = spawnSync(process.execPath, [runner], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
+    if (tr.status === 0) check('P6 scripts/test-runner.mjs exits 0', true);
+    else warn('P6 scripts/test-runner.mjs did not exit 0', `exit ${tr.status}`);
+  }
+  const sec = readme.match(/^#{1,3}\s*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,3}\s|$(?![\s\S]))/im);
+  if (!sec) warn('P7 README office-agent section missing', 'name the owner agent and the entry path');
+  else {
+    const owner = /Owner agent:\s*\S+/i.test(sec[1]);
+    const entry = (sec[1].match(/[\w./-]+\.[a-z]{1,4}\b/gi) || []).some((f) => !/\.(md|json|txt|ya?ml|lock)$/i.test(f) && (() => { try { const p = realpathSync(resolve(ROOT, f)); const r = realpathSync(ROOT); return p.startsWith(r + sep) && statSync(p).isFile(); } catch { return false; } })());
+    if (owner && entry) check('P7 README office-agent section names an owner agent and an existing entry file', true);
+    else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
+  }
+  const cp = rt.code_path;
+  if (!cp) warn('P8 runtime/manifest.json has no code_path', 'point it at code that exists');
+  else if (/^[\w.-]+\/[\w.-]+:/.test(cp)) warn('P8 code_path points at another repo', 'not verified offline');
+  else {
+    let abs = resolve(ROOT, cp);
+    try { abs = realpathSync(abs); } catch { /* absent: existsSync below fails */ }
+    const rootReal = realpathSync(ROOT);
+    const inside = abs === rootReal || abs.startsWith(rootReal + sep);
+    const ok = inside && existsSync(abs) && (statSync(abs).isDirectory() ? hasCode(abs) : CODE_RE.test(cp));
+    if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
+    else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
+  }
+  if (!/^https?:\/\//.test(rt.health_url || '')) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
+  else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
+  if (!rt.register_key) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
+  else console.log(`  [INFO] P10 register_key ${rt.register_key} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
+  const draftDocs = readdirSync(join(ROOT, 'docs')).filter((f) => f.endsWith('.md') && /^> DRAFT — /m.test(readFileSync(join(ROOT, 'docs', f), 'utf8')));
+  if (draftDocs.length) warn(`Docs are still DRAFT stubs (${draftDocs.length} of them)`, 'replace with evidenced content');
 }
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
