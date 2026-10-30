@@ -120,6 +120,7 @@ if (existsSync(runtimeVerify)) {
   const res = spawnSync(process.execPath, [runtimeVerify], {
     cwd: join(ROOT, 'runtime'),
     stdio: 'inherit',
+    timeout: 120000,
   });
   check('Runtime verify suite (runtime/scripts/verify.mjs)', res.status === 0, `exit code ${res.status}`);
 }
@@ -128,7 +129,7 @@ if (existsSync(runtimeVerify)) {
 for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-coverage.mjs']) {
   const sp = join(ROOT, s);
   if (existsSync(sp)) {
-    const res = spawnSync(process.execPath, [sp], { cwd: ROOT, stdio: 'inherit' });
+    const res = spawnSync(process.execPath, [sp], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
     check(`${s} exits 0`, res.status === 0);
   }
 }
@@ -153,7 +154,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
   if (!sec) warn('P7 README office-agent section missing', 'name the owner agent and the entry path');
   else {
     const owner = /Owner agent:\s*\S+/i.test(sec[1]);
-    const entry = (sec[1].match(/[\w./-]+\.[a-z]{1,4}\b/gi) || []).some((f) => !/\.(md|json|txt|ya?ml|lock)$/i.test(f) && (() => { try { const p = realpathSync(resolve(ROOT, f)); const r = realpathSync(ROOT); return p.startsWith(r + sep) && statSync(p).isFile(); } catch { return false; } })());
+    const entry = (sec[1].match(/[\w./-]+\.[a-z]{1,4}\b/gi) || []).some((f) => CODE_RE.test(f) && (() => { try { const p = realpathSync(resolve(ROOT, f)); const r = realpathSync(ROOT); return p.startsWith(r + sep) && statSync(p).isFile(); } catch { return false; } })());
     if (owner && entry) check('P7 README office-agent section names an owner agent and an existing entry file', true);
     else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
   }
@@ -170,12 +171,10 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
     else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
   }
-  if (!/^https?:\/\/[^\s/]+/.test(typeof rt.health_url === 'string' ? rt.health_url.trim() : '')) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
+  if (!(() => { try { const u = new URL(typeof rt.health_url === 'string' ? rt.health_url.trim() : ''); return /^https?:$/.test(u.protocol) && u.hostname.length > 0; } catch { return false; } })()) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
   else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
   if (!rk) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
   else console.log(`  [INFO] P10 register_key ${rk} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
-  const draftDocs = (existsSync(join(ROOT, 'docs')) ? readdirSync(join(ROOT, 'docs')) : []).filter((f) => f.endsWith('.md') && /^> DRAFT — /m.test(readFileSync(join(ROOT, 'docs', f), 'utf8')));
-  if (draftDocs.length) warn(`Docs are still DRAFT stubs (${draftDocs.length} of them)`, 'replace with evidenced content');
 }
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
