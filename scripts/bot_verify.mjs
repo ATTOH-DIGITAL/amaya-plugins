@@ -147,7 +147,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
   else {
     const tr = spawnSync(process.execPath, [runner], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
     if (tr.status === 0) check('P6 scripts/test-runner.mjs exits 0', true);
-    else warn('P6 scripts/test-runner.mjs did not exit 0', `exit ${tr.status}`);
+    else warn('P6 scripts/test-runner.mjs did not exit 0', `exit ${tr.status ?? 'timeout'}`);
   }
   const sec = readme.match(/^#{1,3}\s*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,3}\s|$(?![\s\S]))/im);
   if (!sec) warn('P7 README office-agent section missing', 'name the owner agent and the entry path');
@@ -158,7 +158,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
   }
   const cp = typeof rt.code_path === 'string' ? rt.code_path.trim() : '';
-  const rk = typeof rk === 'string' ? rk.trim() : '';
+  const rk = typeof rt.register_key === 'string' ? rt.register_key.trim() : '';
   if (!cp) warn('P8 runtime/manifest.json has no code_path', 'point it at code that exists');
   else if (/^[\w.-]+\/[\w.-]+:/.test(cp)) warn('P8 code_path points at another repo', 'not verified offline');
   else {
@@ -170,7 +170,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
     else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
   }
-  if (!/^https?:\/\//.test(rt.health_url || '')) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
+  if (!/^https?:\/\/[^\s/]+/.test(typeof rt.health_url === 'string' ? rt.health_url.trim() : '')) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
   else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
   if (!rk) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
   else console.log(`  [INFO] P10 register_key ${rk} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
