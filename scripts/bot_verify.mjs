@@ -143,7 +143,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
   try { rt = JSON.parse(readFileSync(join(ROOT, 'runtime', 'manifest.json'), 'utf8')); } catch { /* absent or invalid */ }
   if (!rt || typeof rt !== 'object' || Array.isArray(rt)) rt = {};
   const CODE_RE = /\.(mjs|cjs|js|jsx|ts|tsx|py|sh|go|rs|rb|php|java)$/i;
-  const hasCode = (d) => { try { return readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name)) : CODE_RE.test(e.name))); } catch { return false; } };
+  const hasCode = (d, depth = 0) => { if (depth > 8) return false; try { return readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name), depth + 1) : CODE_RE.test(e.name))); } catch { return false; } };
   const runner = join(ROOT, 'scripts', 'test-runner.mjs');
   if (!existsSync(runner)) warn('P6 scripts/test-runner.mjs missing', 'add a runner that exits 0');
   else {
@@ -151,16 +151,22 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     if (tr.status === 0) check('P6 scripts/test-runner.mjs exits 0', true);
     else check('P6 scripts/test-runner.mjs exits 0', false, `exit ${tr.status ?? 'timeout'}`);
   }
-  const sec = readme.match(/^#{1,3}\s*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,3}\s|$(?![\s\S]))/im);
-  if (!sec) warn('P7 README office-agent section missing', 'name the owner agent and the entry path');
+  const sec = readme.match(/^#{1,6}[ \t]*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,6}[ \t]|$(?![\s\S]))/im);
+  if (!sec) warn('P7 README office-agent section missing', 'add an "Office agent" section with "Owner agent:" and "Entry:" lines');
   else {
-    const owner = /^[ \t]*(?:[-*][ \t]+)?\**Owner agent:\**[ \t]*\S+/im.test(sec[1]);
-    const entry = (sec[1].match(/[\w./-]+\.[a-z]{1,4}\b/gi) || []).some((f) => CODE_RE.test(f) && (() => { try { const p = realpathSync(resolve(ROOT, f)); const r = realpathSync(ROOT); return p.startsWith(r + sep) && statSync(p).isFile(); } catch { return false; } })());
-    if (owner && entry) check('P7 README office-agent section names an owner agent and an existing entry file', true);
-    else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
+    // Deterministic contract: two labelled lines, outside code fences. "Owner agent: <name>" (UNASSIGNED allowed) and "Entry: <path>" naming an existing in-repo file.
+    const body = sec[1].replace(/```[\s\S]*?```/g, '');
+    const ownerM = body.match(/^[ \t]*(?:[-*][ \t]+)?\**Owner agent:\**[ \t]*([^\n]*)$/im);
+    const owner = !!ownerM && /[A-Za-z0-9]/.test(ownerM[1]);
+    const entryM = body.match(/^[ \t]*(?:[-*][ \t]+)?\**Entry(?: ?(?:point|file))?:\**[ \t]*`?([\w./-]+)`?[ \t]*$/im);
+    let entry = false;
+    if (entryM) { try { const p = realpathSync(resolve(ROOT, entryM[1])); entry = p.startsWith(realpathSync(ROOT) + sep) && statSync(p).isFile(); } catch { entry = false; } }
+    if (owner && entry) check('P7 README office-agent section has an Owner agent line and an existing Entry file', true);
+    else warn('P7 office-agent section needs an "Owner agent: <name>" line (UNASSIGNED is allowed) and an "Entry: <path>" line naming an existing file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
   }
   const cp = typeof rt.code_path === 'string' ? rt.code_path.trim() : '';
-  const rk = typeof rt.register_key === 'string' ? rt.register_key.trim() : '';
+  const PLACEHOLDER = /^(?:tbd|todo|none|null|n\/a|na|x+|\.+|-+|changeme|example|placeholder)$/i;
+  const rk = typeof rt.register_key === 'string' && !PLACEHOLDER.test(rt.register_key.trim()) ? rt.register_key.trim() : '';
   if (!cp) warn('P8 runtime/manifest.json has no code_path', 'point it at code that exists');
   else if (/^[\w.-]+\/[\w.-]+:/.test(cp)) warn('P8 code_path points at another repo', 'not verified offline');
   else {
@@ -173,7 +179,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
     else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
   }
-  if (!(() => { try { const u = new URL(typeof rt.health_url === 'string' ? rt.health_url.trim() : ''); return /^https?:$/.test(u.protocol) && u.hostname.length > 0; } catch { return false; } })()) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
+  if (!(() => { try { const u = new URL(typeof rt.health_url === 'string' ? rt.health_url.trim() : ''); return /^https?:$/.test(u.protocol) && u.hostname.includes('.') && !/(^|\.)example\.(com|org|net)$/i.test(u.hostname); } catch { return false; } })()) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
   else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
   if (!rk) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
   else console.log(`  [INFO] P10 register_key ${rk} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
