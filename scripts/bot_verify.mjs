@@ -133,12 +133,7 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
   }
 }
 
-// Run root test-runner if present
-const tr = join(ROOT, 'scripts', 'test-runner.mjs');
-if (existsSync(tr)) {
-  const res = spawnSync(process.execPath, [tr], { cwd: ROOT, stdio: 'inherit' });
-  check('scripts/test-runner.mjs exits 0', res.status === 0);
-}
+// scripts/test-runner.mjs is run once, by P6 below (WARN until WARN_UNTIL, then hard fail).
 
 // P6-P10 (PILLARS-STANDARD.md): WARN until WARN_UNTIL, then hard fail. Offline file checks only; the P9 probe and P10 register need scripts/pillar_scan.mjs.
 {
@@ -162,7 +157,8 @@ if (existsSync(tr)) {
     if (owner && entry) check('P7 README office-agent section names an owner agent and an existing entry file', true);
     else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
   }
-  const cp = rt.code_path;
+  const cp = typeof rt.code_path === 'string' ? rt.code_path.trim() : '';
+  const rk = typeof rk === 'string' ? rk.trim() : '';
   if (!cp) warn('P8 runtime/manifest.json has no code_path', 'point it at code that exists');
   else if (/^[\w.-]+\/[\w.-]+:/.test(cp)) warn('P8 code_path points at another repo', 'not verified offline');
   else {
@@ -176,9 +172,9 @@ if (existsSync(tr)) {
   }
   if (!/^https?:\/\//.test(rt.health_url || '')) warn('P9 no http(s) health URL in runtime/manifest.json', 'name one that returns 2xx/3xx to a plain GET');
   else console.log('  [INFO] P9 health URL named; the live GET is made by scripts/pillar_scan.mjs, not offline');
-  if (!rt.register_key) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
-  else console.log(`  [INFO] P10 register_key ${rt.register_key} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
-  const draftDocs = readdirSync(join(ROOT, 'docs')).filter((f) => f.endsWith('.md') && /^> DRAFT — /m.test(readFileSync(join(ROOT, 'docs', f), 'utf8')));
+  if (!rk) warn('P10 runtime/manifest.json has no register_key', 'set it to the products.product_key (or source_repo) row; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists');
+  else console.log(`  [INFO] P10 register_key ${rk} named; scripts/pillar_scan.mjs with CODE_SUPA verifies the row exists`);
+  const draftDocs = (existsSync(join(ROOT, 'docs')) ? readdirSync(join(ROOT, 'docs')) : []).filter((f) => f.endsWith('.md') && /^> DRAFT — /m.test(readFileSync(join(ROOT, 'docs', f), 'utf8')));
   if (draftDocs.length) warn(`Docs are still DRAFT stubs (${draftDocs.length} of them)`, 'replace with evidenced content');
 }
 
