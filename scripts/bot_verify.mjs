@@ -141,19 +141,20 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
   const readme = existsSync(join(ROOT, 'README.md')) ? readFileSync(join(ROOT, 'README.md'), 'utf8') : '';
   let rt = {};
   try { rt = JSON.parse(readFileSync(join(ROOT, 'runtime', 'manifest.json'), 'utf8')); } catch { /* absent or invalid */ }
+  if (!rt || typeof rt !== 'object' || Array.isArray(rt)) rt = {};
   const CODE_RE = /\.(mjs|cjs|js|jsx|ts|tsx|py|sh|go|rs|rb|php|java)$/i;
-  const hasCode = (d) => readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name)) : CODE_RE.test(e.name)));
+  const hasCode = (d) => { try { return readdirSync(d, { withFileTypes: true }).some((e) => !e.isSymbolicLink() && (e.isDirectory() ? !['node_modules', '.git'].includes(e.name) && hasCode(join(d, e.name)) : CODE_RE.test(e.name))); } catch { return false; } };
   const runner = join(ROOT, 'scripts', 'test-runner.mjs');
   if (!existsSync(runner)) warn('P6 scripts/test-runner.mjs missing', 'add a runner that exits 0');
   else {
     const tr = spawnSync(process.execPath, [runner], { cwd: ROOT, stdio: 'inherit', timeout: 120000 });
     if (tr.status === 0) check('P6 scripts/test-runner.mjs exits 0', true);
-    else warn('P6 scripts/test-runner.mjs did not exit 0', `exit ${tr.status ?? 'timeout'}`);
+    else check('P6 scripts/test-runner.mjs exits 0', false, `exit ${tr.status ?? 'timeout'}`);
   }
   const sec = readme.match(/^#{1,3}\s*(?:Office agent|Agent contract)[^\n]*\n([\s\S]*?)(?=^#{1,3}\s|$(?![\s\S]))/im);
   if (!sec) warn('P7 README office-agent section missing', 'name the owner agent and the entry path');
   else {
-    const owner = /Owner agent:\s*\S+/i.test(sec[1]);
+    const owner = /^[ \t]*(?:[-*][ \t]+)?\**Owner agent:\**[ \t]*\S+/im.test(sec[1]);
     const entry = (sec[1].match(/[\w./-]+\.[a-z]{1,4}\b/gi) || []).some((f) => CODE_RE.test(f) && (() => { try { const p = realpathSync(resolve(ROOT, f)); const r = realpathSync(ROOT); return p.startsWith(r + sep) && statSync(p).isFile(); } catch { return false; } })());
     if (owner && entry) check('P7 README office-agent section names an owner agent and an existing entry file', true);
     else warn('P7 office-agent section needs an "Owner agent:" line (UNASSIGNED is allowed) and an existing entry file', `owner ${owner ? 'ok' : 'missing'}, entry ${entry ? 'ok' : 'missing'}`);
@@ -167,7 +168,8 @@ for (const s of ['scripts/verify-n8n-table-refs.mjs', 'scripts/verify-schema-cov
     try { abs = realpathSync(abs); } catch { /* absent: existsSync below fails */ }
     const rootReal = realpathSync(ROOT);
     const inside = abs === rootReal || abs.startsWith(rootReal + sep);
-    const ok = inside && existsSync(abs) && (statSync(abs).isDirectory() ? hasCode(abs) : CODE_RE.test(cp));
+    let ok = false;
+    try { ok = inside && abs !== rootReal && (statSync(abs).isDirectory() ? hasCode(abs) : CODE_RE.test(abs)); } catch { ok = false; }
     if (ok) check(`P8 code_path ${cp} exists and holds code`, true);
     else warn(`P8 code_path ${cp} is not code that exists`, 'fix the pointer');
   }
